@@ -1,5 +1,5 @@
 name: Stash Star Rater
-description: Replaces the decimal 1-10 rating with 10 visual stars (half-star precision)
+description: For those who want to rate scenes 1-10 stars without fussing with decimal numbers
 version: 0.1.0
 ui:
   javascript:
