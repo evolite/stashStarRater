@@ -2,9 +2,10 @@
   "name": "stash-star-rater",
   "private": true,
   "scripts": {
-    "build": "esbuild src/stashStarRater.ts --bundle --format=iife --banner:js='// fallow-ignore-file unused-file' --outfile=stashStarRater.js && npm run deploy",
+    "build": "esbuild src/stashStarRater.ts --bundle --format=iife --banner:js='// fallow-ignore-file unused-file' --outfile=stashStarRater.js",
     "watch": "esbuild src/stashStarRater.ts --bundle --format=iife --outfile=stashStarRater.js --watch",
-    "deploy": "mkdir -p /home/evotech/Services/containers/data/stash/plugins/stashgifs/stashStarRater && cp stashStarRater.js stashStarRater.yml /home/evotech/Services/containers/data/stash/plugins/stashgifs/stashStarRater/"
+    "deploy": "mkdir -p /home/evotech/Services/containers/data/stash/plugins/stashgifs/stashStarRater && cp stashStarRater.js stashStarRater.yml /home/evotech/Services/containers/data/stash/plugins/stashgifs/stashStarRater/",
+    "release": "npm run build && npm run deploy"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",

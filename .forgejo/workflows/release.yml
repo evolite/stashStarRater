@@ -1,0 +1,103 @@
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    runs-on: docker
+    container: node:22-alpine
+    steps:
+      - name: Install tools
+        run: apk add --no-cache zip curl git python3
+
+      - uses: actions/checkout@v3
+
+      - name: Build
+        run: npm ci && npm run build
+
+      - name: Create zip
+        run: zip stashStarRater.zip stashStarRater.yml stashStarRater.js
+
+      - name: Compute sha256
+        id: sha
+        run: echo "hash=$(sha256sum stashStarRater.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Parse version
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Delete existing release
+        run: |
+          ID=$(curl -sL \
+            -H "Authorization: token ${{ secrets.CODEBERG_TOKEN }}" \
+            "https://codeberg.org/api/v1/repos/surging9143/stashStarRater/releases/tags/${GITHUB_REF_NAME}" \
+            | python3 -c "import sys,json; r=json.load(sys.stdin); print(r.get('id',''))" 2>/dev/null || true)
+          if [ -n "$ID" ]; then
+            curl -sL -X DELETE \
+              -H "Authorization: token ${{ secrets.CODEBERG_TOKEN }}" \
+              "https://codeberg.org/api/v1/repos/surging9143/stashStarRater/releases/$ID"
+          fi
+
+      - name: Create release
+        id: release
+        run: |
+          SHA=$(git rev-parse HEAD)
+          RESP=$(curl -sL -X POST \
+            -H "Authorization: token ${{ secrets.CODEBERG_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "https://codeberg.org/api/v1/repos/surging9143/stashStarRater/releases" \
+            -d "{\"tag_name\":\"${GITHUB_REF_NAME}\",\"name\":\"${GITHUB_REF_NAME}\",\"body\":\"Release ${GITHUB_REF_NAME}\",\"target_commitish\":\"$SHA\",\"draft\":false,\"prerelease\":false}")
+          echo "id=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")" >> $GITHUB_OUTPUT
+
+      - name: Upload zip asset
+        run: |
+          curl -sL -X POST \
+            -H "Authorization: token ${{ secrets.CODEBERG_TOKEN }}" \
+            -H "Content-Type: application/octet-stream" \
+            "https://codeberg.org/api/v1/repos/surging9143/stashStarRater/releases/${{ steps.release.outputs.id }}/assets?name=stashStarRater.zip" \
+            --data-binary "@stashStarRater.zip"
+
+      - name: Update pages index
+        run: |
+          git config --global user.email "ci@codeberg.org"
+          git config --global user.name "CI"
+          git clone "https://surging9143:${{ secrets.CODEBERG_TOKEN }}@codeberg.org/surging9143/pages.git" /tmp/pages
+          VERSION="${{ steps.ver.outputs.version }}"
+          HASH="${{ steps.sha.outputs.hash }}"
+          DATE=$(date +"%Y-%m-%d %H:%M:%S")
+          URL="https://codeberg.org/surging9143/stashStarRater/releases/download/${GITHUB_REF_NAME}/stashStarRater.zip"
+          python3 - <<PYEOF
+          import re
+
+          path = "/tmp/pages/index.yml"
+          with open(path) as f:
+              content = f.read()
+
+          entry = f"""
+          - id: stashStarRater
+            name: Stash Star Rater
+            metadata:
+              description: For those who want to rate scenes 1-10 stars without fussing with decimal numbers
+            version: {VERSION}
+            date: "{DATE}"
+            path: {URL}
+            sha256: {HASH}
+          """
+
+          if "id: stashStarRater" in content:
+              content = re.sub(
+                  r'- id: stashStarRater\b.*?(?=\n- |\Z)',
+                  entry.strip(),
+                  content, flags=re.DOTALL
+              )
+          else:
+              content = content.rstrip('\n') + '\n' + entry.strip() + '\n'
+
+          with open(path, "w") as f:
+              f.write(content)
+          PYEOF
+          cd /tmp/pages
+          git add index.yml
+          git diff --staged --quiet || git commit -m "Update stashStarRater to v${VERSION}"
+          git push
