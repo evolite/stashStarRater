@@ -1,0 +1,6 @@
+name: Stash Star Rater
+description: Replaces the decimal 1-10 rating with 10 visual stars (half-star precision)
+version: 0.1.0
+ui:
+  javascript:
+    - stashStarRater.js
