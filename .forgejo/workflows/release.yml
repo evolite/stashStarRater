@@ -5,13 +5,14 @@ on:
 
 jobs:
   release:
-    runs-on: docker
-    container: node:22-alpine
+    runs-on: codeberg-small
     steps:
-      - name: Install tools
-        run: apk add --no-cache zip curl git python3
-
       - uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
       - name: Build
         run: npm ci && npm run build
