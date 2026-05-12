@@ -60,44 +60,51 @@ jobs:
             --data-binary "@stashStarRater.zip"
 
       - name: Update pages index
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          HASH: ${{ steps.sha.outputs.hash }}
+          TAG: ${{ github.ref_name }}
+          CODEBERG_TOKEN: ${{ secrets.CODEBERG_TOKEN }}
         run: |
           git config --global user.email "ci@codeberg.org"
           git config --global user.name "CI"
-          git clone "https://surging9143:${{ secrets.CODEBERG_TOKEN }}@codeberg.org/surging9143/pages.git" /tmp/pages
-          VERSION="${{ steps.ver.outputs.version }}"
-          HASH="${{ steps.sha.outputs.hash }}"
-          DATE=$(date +"%Y-%m-%d %H:%M:%S")
-          URL="https://codeberg.org/surging9143/stashStarRater/releases/download/${GITHUB_REF_NAME}/stashStarRater.zip"
-          python3 - <<PYEOF
-          import re
+          git clone "https://surging9143:${CODEBERG_TOKEN}@codeberg.org/surging9143/pages.git" /tmp/pages
+          export DATE=$(date +"%Y-%m-%d %H:%M:%S")
+          export URL="https://codeberg.org/surging9143/stashStarRater/releases/download/${TAG}/stashStarRater.zip"
+          python3 - <<'PYEOF'
+import re, os
+version = os.environ['VERSION']
+hash_   = os.environ['HASH']
+date    = os.environ['DATE']
+url     = os.environ['URL']
 
-          path = "/tmp/pages/index.yml"
-          with open(path) as f:
-              content = f.read()
+path = "/tmp/pages/index.yml"
+with open(path) as f:
+    content = f.read()
 
-          entry = f"""
-          - id: stashStarRater
-            name: Stash Star Rater
-            metadata:
-              description: For those who want to rate scenes 1-10 stars without fussing with decimal numbers
-            version: {VERSION}
-            date: "{DATE}"
-            path: {URL}
-            sha256: {HASH}
-          """
+entry = (
+    "- id: stashStarRater\n"
+    "  name: Stash Star Rater\n"
+    "  metadata:\n"
+    "    description: For those who want to rate scenes 1-10 stars without fussing with decimal numbers\n"
+    f"  version: {version}\n"
+    f'  date: "{date}"\n'
+    f"  path: {url}\n"
+    f"  sha256: {hash_}"
+)
 
-          if "id: stashStarRater" in content:
-              content = re.sub(
-                  r'- id: stashStarRater\b.*?(?=\n- |\Z)',
-                  entry.strip(),
-                  content, flags=re.DOTALL
-              )
-          else:
-              content = content.rstrip('\n') + '\n' + entry.strip() + '\n'
+if "id: stashStarRater" in content:
+    content = re.sub(
+        r'- id: stashStarRater\b.*?(?=\n- |\Z)',
+        entry,
+        content, flags=re.DOTALL
+    )
+else:
+    content = content.rstrip('\n') + '\n' + entry + '\n'
 
-          with open(path, "w") as f:
-              f.write(content)
-          PYEOF
+with open(path, "w") as f:
+    f.write(content)
+PYEOF
           cd /tmp/pages
           git add index.yml
           git diff --staged --quiet || git commit -m "Update stashStarRater to v${VERSION}"
