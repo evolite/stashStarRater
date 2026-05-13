@@ -1,9 +1,7 @@
-# Stash Star Rater
+Replaces Stash’s decimal rating input with the Star behavior, just with 10 stars instead of 5. Hover for a preview, click the left half of a star for a half-star, the right half for a full star.
 
-For those who want to rate scenes 1-10 stars without fussing with decimal numbers.
+Uses the same styling as the 5 star input.
 
-Replaces Stash's decimal rating input with 10 clickable SVG stars. Hover for a preview, click the left half of a star for a half-star, the right half for a full star.
-
-## Requirements
-
-- Stash with the rating system set to a 1-10 decimal scale.
+Requirements
+In Stash set
+"Rating system type": Decimal
