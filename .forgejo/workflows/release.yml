@@ -18,7 +18,7 @@ jobs:
         run: npm ci && npm run build
 
       - name: Create zip
-        run: zip stashStarRater.zip stashStarRater.yml stashStarRater.js
+        run: python3 -c "import zipfile; z=zipfile.ZipFile('stashStarRater.zip','w',zipfile.ZIP_DEFLATED); z.write('stashStarRater.yml'); z.write('stashStarRater.js'); z.close()"
 
       - name: Compute sha256
         id: sha

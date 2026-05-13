@@ -154,15 +154,17 @@
         renderStars(buttons, committed);
       });
     });
-    let frames = 0;
-    (function poll() {
+    const syncInterval = setInterval(() => {
+      if (!document.contains(container)) {
+        clearInterval(syncInterval);
+        return;
+      }
       const v = readStars(el);
       if (v !== committed) {
         committed = v;
         renderStars(buttons, committed);
       }
-      if (committed === 0 && ++frames < 300) requestAnimationFrame(poll);
-    })();
+    }, 250);
   }
   var SELECTORS = [
     "input.rating-number",

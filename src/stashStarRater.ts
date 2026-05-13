@@ -193,14 +193,13 @@ function inject(el: HTMLElement): void {
     });
   });
 
-  // Poll until a non-zero rating appears (GraphQL may not have resolved yet).
-  // Stops as soon as a value is found; hard-caps at ~5 s.
-  let frames = 0;
-  (function poll() {
+  // Continuously sync the star display with the underlying element's value.
+  // Handles both slow GraphQL resolution and same-element navigation reuse.
+  const syncInterval = setInterval(() => {
+    if (!document.contains(container)) { clearInterval(syncInterval); return; }
     const v = readStars(el);
     if (v !== committed) { committed = v; renderStars(buttons, committed); }
-    if (committed === 0 && ++frames < 300) requestAnimationFrame(poll);
-  })();
+  }, 250);
 }
 
 const SELECTORS = [
