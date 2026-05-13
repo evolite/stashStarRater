@@ -12,11 +12,3 @@ Replaces Stash's decimal rating input with 10 clickable SVG stars. Hover for a p
 ## Requirements
 
 - Stash with the rating system set to a 1-10 decimal scale.
-
-## Development
-
-```sh
-npm install
-npm run build   # compiles + deploys to the configured plugins folder
-npm run watch   # rebuilds on file change (no auto-deploy)
-```
