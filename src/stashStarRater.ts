@@ -1,7 +1,7 @@
 const STAR_COUNT = 10;
 const GOLD_COLOR = '#ffc107';
 
-// 1. Inject CSS to fix colors and layout once
+// 1. Inject CSS
 const style = document.createElement('style');
 style.id = 'stash-star-rater-styles';
 style.textContent = `
@@ -30,6 +30,11 @@ const STAR_EMPTY_PATH  = 'M288.1-32c9 0 17.3 5.1 21.4 13.1L383 125.3 542.9 150.7
 const replaced = new WeakSet<HTMLElement>();
 const activeSyncers = new Set<() => void>();
 
+function getEntityInfo(): { type: string, id: string } | null {
+  const m = window.location.pathname.match(/\/(scenes|images|performers|studios|groups|galleries|movies)\/(\d+)/);
+  return m ? { type: m[1], id: m[2] } : null;
+}
+
 function makeFallbackDiv(className: string): HTMLDivElement {
   const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg') as SVGSVGElement;
@@ -51,82 +56,54 @@ function createStarButton(filledTmpl: HTMLDivElement | null, emptyTmpl: HTMLDivE
   btn.className = 'minimal star-fill-0 btn btn-secondary';
   btn.dataset.srBtn = '1';
   btn.appendChild(filledTmpl ? (filledTmpl.cloneNode(true) as HTMLDivElement) : makeFallbackDiv('filled-star'));
-  
-  let emptyDiv: HTMLDivElement;
-  if (emptyTmpl) {
-    emptyDiv = emptyTmpl.cloneNode(true) as HTMLDivElement;
-  } else if (filledTmpl) {
-    emptyDiv = filledTmpl.cloneNode(true) as HTMLDivElement;
-    emptyDiv.className = 'unfilled-star';
-    const svg = emptyDiv.querySelector('svg');
-    if (svg) { svg.classList.remove('set'); svg.classList.add('unset'); }
-  } else {
-    emptyDiv = makeFallbackDiv('unfilled-star');
-  }
+  let emptyDiv = (emptyTmpl || filledTmpl) ? (emptyTmpl || filledTmpl)!.cloneNode(true) as HTMLDivElement : makeFallbackDiv('unfilled-star');
+  emptyDiv.className = 'unfilled-star';
+  const svg = emptyDiv.querySelector('svg');
+  if (svg) { svg.classList.remove('set'); svg.classList.add('unset'); }
   btn.appendChild(emptyDiv);
   return btn;
 }
 
-function setStarClass(btn: HTMLButtonElement, fraction: number): void {
-  const pct = fraction >= 1 ? 100 : fraction >= 0.5 ? 50 : 0;
-  btn.classList.remove('star-fill-0', 'star-fill-50', 'star-fill-100');
-  btn.classList.add(`star-fill-${pct}`);
-}
-
 function renderStars(buttons: HTMLButtonElement[], value: number): void {
-  for (let i = 0; i < buttons.length; i++) {
-    const n = i + 1;
-    setStarClass(buttons[i], value >= n ? 1 : value >= n - 0.5 ? 0.5 : 0);
-  }
-}
-
-function hoverValue(buttons: HTMLButtonElement[], clientX: number): number | null {
-  for (let i = 0; i < buttons.length; i++) {
-    const r = buttons[i].getBoundingClientRect();
-    if (clientX >= r.left && clientX <= r.right)
-      return clientX - r.left < r.width / 2 ? i + 0.5 : i + 1;
-  }
-  return null;
+  buttons.forEach((btn, i) => {
+    const fraction = value >= i + 1 ? 1 : value >= i + 0.5 ? 0.5 : 0;
+    const pct = fraction >= 1 ? 100 : fraction >= 0.5 ? 50 : 0;
+    btn.classList.remove('star-fill-0', 'star-fill-50', 'star-fill-100');
+    btn.classList.add(`star-fill-${pct}`);
+  });
 }
 
 function readStars(el: HTMLElement): number {
   const propsKey = Object.keys(el).find(k => k.startsWith('__reactProps$'));
   if (propsKey) {
-    const props = (el as any)[propsKey] as Record<string, unknown>;
+    const props = (el as any)[propsKey] as Record<string, any>;
     for (const field of ['value', 'defaultValue', 'children']) {
       const val = props[field];
       const raw = typeof val === 'number' ? val : parseFloat(String(val ?? ''));
       if (!isNaN(raw) && raw > 0) return raw > STAR_COUNT ? (raw / 100) * STAR_COUNT : raw;
     }
   }
-  const domStr = el instanceof HTMLInputElement ? el.value : (el.textContent ?? '');
-  const raw = parseFloat(domStr);
+  const raw = parseFloat(el instanceof HTMLInputElement ? el.value : (el.textContent ?? ''));
   return (!isNaN(raw) && raw > 0) ? (raw > STAR_COUNT ? (raw / 100) * STAR_COUNT : raw) : 0;
 }
 
-const ENTITY_MAP: Record<string, [string, string]> = {
-  scenes: ['sceneUpdate', 'SceneUpdateInput'],
-  images: ['imageUpdate', 'ImageUpdateInput'],
-  performers: ['performerUpdate', 'PerformerUpdateInput'],
-  studios: ['studioUpdate', 'StudioUpdateInput'],
-  groups: ['groupUpdate', 'GroupUpdateInput'],
-  galleries: ['galleryUpdate', 'GalleryUpdateInput'],
-  movies: ['movieUpdate', 'MovieUpdateInput'],
-};
-
 async function saveRating(starValue: number): Promise<void> {
-  const m = window.location.pathname.match(/\/(scenes|images|performers|studios|groups|galleries|movies)\/(\d+)/);
-  if (!m) return;
-  const cfg = ENTITY_MAP[m[1]];
-  if (!cfg) return;
+  const info = getEntityInfo();
+  if (!info) return;
+  const ENTITY_MAP: Record<string, [string, string]> = {
+    scenes: ['sceneUpdate', 'SceneUpdateInput'], images: ['imageUpdate', 'ImageUpdateInput'],
+    performers: ['performerUpdate', 'PerformerUpdateInput'], studios: ['studioUpdate', 'StudioUpdateInput'],
+    groups: ['groupUpdate', 'GroupUpdateInput'], galleries: ['galleryUpdate', 'GalleryUpdateInput'], movies: ['movieUpdate', 'MovieUpdateInput'],
+  };
+  const cfg = ENTITY_MAP[info.type];
   const rating100 = Math.round((starValue / STAR_COUNT) * 100);
-  const apiKey: string = (window as any).PluginApi?.apiKey ?? (window as any).stash?.apiKey ?? '';
+  const apiKey = (window as any).PluginApi?.apiKey ?? (window as any).stash?.apiKey ?? '';
   await fetch('/graphql', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(apiKey ? { ApiKey: apiKey } : {}) },
     body: JSON.stringify({
       query: `mutation($i:${cfg[1]}!){${cfg[0]}(input:$i){id rating100}}`,
-      variables: { i: { id: m[2], rating100 } },
+      variables: { i: { id: info.id, rating100 } },
     }),
   });
 }
@@ -139,20 +116,15 @@ function inject(el: HTMLElement): void {
   replaced.add(container);
 
   if (isDecimal) container.style.pointerEvents = 'auto';
-
   const valueEl: HTMLElement = isDecimal ? (el.querySelector('span') ?? el) : el;
   const filledTmpl = container.querySelector<HTMLDivElement>('.filled-star');
   const emptyTmpl  = container.querySelector<HTMLDivElement>('.unfilled-star');
 
-  if (isDecimal) {
-    Array.from(container.children).forEach(c => { (c as HTMLElement).style.display = 'none'; });
-  } else {
-    container.querySelectorAll<HTMLButtonElement>(':scope > button').forEach(b => { b.style.display = 'none'; });
-  }
+  if (isDecimal) Array.from(container.children).forEach(c => (c as HTMLElement).style.display = 'none');
+  else container.querySelectorAll<HTMLButtonElement>(':scope > button').forEach(b => b.style.display = 'none');
 
-  const buttonParent: HTMLElement = isDecimal
-    ? (() => { const w = document.createElement('div'); w.className = 'rating-stars'; container.appendChild(w); return w; })()
-    : container;
+  const buttonParent = isDecimal ? document.createElement('div') : container;
+  if (isDecimal) { buttonParent.className = 'rating-stars'; container.appendChild(buttonParent); }
 
   const buttons: HTMLButtonElement[] = [];
   for (let i = 0; i < STAR_COUNT; i++) {
@@ -161,83 +133,71 @@ function inject(el: HTMLElement): void {
     buttons.push(btn);
   }
 
-  const ratingNumSpan: HTMLElement | null = isDecimal
-    ? (() => { const s = document.createElement('span'); s.className = 'star-rating-number'; buttonParent.appendChild(s); return s; })()
-    : null;
+  const ratingNumSpan = isDecimal ? document.createElement('span') : null;
+  if (ratingNumSpan) { ratingNumSpan.className = 'star-rating-number'; buttonParent.appendChild(ratingNumSpan); }
 
   const show = (v: number) => {
     renderStars(buttons, v);
     const txt = v > 0 ? String(v) : '';
-    // Update valueEl text if it's not the one we're reading props from or if it's just a text span
     if (valueEl.textContent !== txt) valueEl.textContent = txt;
     if (ratingNumSpan) ratingNumSpan.textContent = txt;
   };
 
   let committed = readStars(valueEl);
+  let currentId = getEntityInfo()?.id;
   let hovering = false;
   show(committed);
 
-  const eventTarget = isDecimal ? buttonParent : container;
-
-  eventTarget.addEventListener('mousemove', (e: MouseEvent) => {
-    hovering = true;
-    show(hoverValue(buttons, e.clientX) ?? committed);
-  });
-
-  eventTarget.addEventListener('mouseleave', () => {
-    hovering = false;
-    show(committed);
-  });
-
-  eventTarget.addEventListener('click', (e: MouseEvent) => {
-    const v = hoverValue(buttons, e.clientX);
-    if (v === null) return;
-    const prev = committed;
-    committed = v;
-    show(committed);
-    saveRating(v).catch(() => { committed = prev; show(committed); });
-  });
-
   const sync = () => {
-    if (!document.contains(container)) {
-      activeSyncers.delete(sync);
-      clearInterval(syncInterval);
+    if (!document.contains(container)) { activeSyncers.delete(sync); clearInterval(interval); return; }
+    const info = getEntityInfo();
+    const v = readStars(valueEl);
+    
+    // FORCE RESET if we detect the scene ID has changed
+    if (info?.id !== currentId) {
+      currentId = info?.id;
+      committed = v;
+      show(committed);
       return;
     }
-    const v = readStars(valueEl);
+
     if (v !== committed && !hovering) {
       committed = v;
       show(committed);
     }
   };
 
+  const interval = setInterval(sync, 150);
   activeSyncers.add(sync);
-  // Polling reduced to 100ms for responsiveness
-  const syncInterval = setInterval(sync, 100);
+
+  const getHover = (e: MouseEvent) => {
+    for (let i = 0; i < buttons.length; i++) {
+      const r = buttons[i].getBoundingClientRect();
+      if (e.clientX >= r.left && e.clientX <= r.right) return e.clientX - r.left < r.width / 2 ? i + 0.5 : i + 1;
+    }
+    return null;
+  };
+
+  const target = isDecimal ? buttonParent : container;
+  target.addEventListener('mousemove', (e) => { hovering = true; show(getHover(e) ?? committed); });
+  target.addEventListener('mouseleave', () => { hovering = false; show(committed); });
+  target.addEventListener('click', (e) => {
+    const v = getHover(e);
+    if (v !== null) { committed = v; show(v); saveRating(v).catch(() => sync()); }
+  });
 }
 
-const SELECTORS = ['.star-rating-number', '.rating-number'];
-
-function scan(): void {
-  for (const sel of SELECTORS)
-    document.querySelectorAll<HTMLElement>(sel).forEach(inject);
-}
-
-function init(): void {
+function init() {
+  const scan = () => document.querySelectorAll<HTMLElement>('.star-rating-number, .rating-number').forEach(inject);
   scan();
-  let pending = false;
-  new MutationObserver(() => {
-    if (pending) return;
-    pending = true;
-    requestAnimationFrame(() => { pending = false; scan(); });
-  }).observe(document.body, { childList: true, subtree: true });
-
-  // Force an immediate sync update when the URL changes (SPA navigation)
+  new MutationObserver(scan).observe(document.body, { childList: true, subtree: true });
+  
+  // Instant trigger on URL change
   let lastPath = window.location.pathname;
   setInterval(() => {
     if (window.location.pathname !== lastPath) {
       lastPath = window.location.pathname;
-      activeSyncers.forEach(s => s()); // Trigger all active star raters to check their values
+      activeSyncers.forEach(s => s());
     }
   }, 100);
 }
