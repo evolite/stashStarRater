@@ -19,6 +19,8 @@
   .rating-stars button[data-sr-btn].star-half-outline .filled-star { display: none; }
   .rating-stars button[data-sr-btn].star-half-outline .unfilled-star { display: block; }
   .rating-stars button[data-sr-btn].star-half-outline .unfilled-star svg path { fill: url(#sr-grad) !important; }
+  @keyframes sr-pop { 0% { transform: scale(1); } 40% { transform: scale(1.5); } 100% { transform: scale(1); } }
+  .rating-stars button[data-sr-btn].sr-pop { animation: sr-pop 0.2s ease-out; }
 `;
   if (!document.getElementById(style.id)) document.head.appendChild(style);
   if (!document.getElementById("sr-grad")) {
@@ -176,6 +178,11 @@
     target.addEventListener("click", async (e) => {
       const v = getHoverValue(e);
       if (v === null) return;
+      const clickedBtn = e.target.closest("button[data-sr-btn]");
+      if (clickedBtn) {
+        clickedBtn.classList.add("sr-pop");
+        clickedBtn.addEventListener("animationend", () => clickedBtn.classList.remove("sr-pop"), { once: true });
+      }
       const ratingToSend = Math.round(v / STAR_COUNT * 100);
       const clearing = ratingToSend === Math.round(committed / STAR_COUNT * 100);
       const prev = committed;
