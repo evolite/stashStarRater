@@ -28,6 +28,7 @@ const STAR_FILLED_PATH = 'M309.5-18.9c-4.1-8-12.4-13.1-21.4-13.1s-17.3 5.1-21.4 
 const STAR_EMPTY_PATH  = 'M288.1-32c9 0 17.3 5.1 21.4 13.1L383 125.3 542.9 150.7c8.9 1.4 16.3 7.7 19.1 16.3s.5 18-5.8 24.4L441.7 305.9 467 465.8c1.4 8.9-2.3 17.9-9.6 23.2s-17 6.1-25 2L288.1 417.6 143.8 491c-8 4.1-17.7 3.3-25-2s-11-14.2-9.6-23.2L134.4 305.9 20 191.4c-6.4-6.4-8.6-15.8-5.8-24.4s10.1-14.9 19.1-16.3l159.9-25.4 73.6-144.2c4.1-8 12.4-13.1 21.4-13.1zm0 76.8L230.3 158c-3.5 6.8-10 11.6-17.6 12.8l-125.5 20 89.8 89.9c5.4 5.4 7.9 13.1 6.7 20.7l-19.8 125.5 113.3-57.6c6.8-3.5 14.9-3.5 21.8 0l113.3 57.6-19.8-125.5c-1.2-7.6 1.3-15.3 6.7-20.7l89.8-89.9-125.5-20c-7.6-1.2-14.1-6-17.6-12.8L288.1 44.8z';
 
 const replaced = new WeakSet<HTMLElement>();
+const activeSyncers = new Set<() => void>();
 
 function makeFallbackDiv(className: string): HTMLDivElement {
   const ns = 'http://www.w3.org/2000/svg';
@@ -49,7 +50,6 @@ function createStarButton(filledTmpl: HTMLDivElement | null, emptyTmpl: HTMLDivE
   btn.type = 'button';
   btn.className = 'minimal star-fill-0 btn btn-secondary';
   btn.dataset.srBtn = '1';
-
   btn.appendChild(filledTmpl ? (filledTmpl.cloneNode(true) as HTMLDivElement) : makeFallbackDiv('filled-star'));
   
   let emptyDiv: HTMLDivElement;
@@ -59,15 +59,11 @@ function createStarButton(filledTmpl: HTMLDivElement | null, emptyTmpl: HTMLDivE
     emptyDiv = filledTmpl.cloneNode(true) as HTMLDivElement;
     emptyDiv.className = 'unfilled-star';
     const svg = emptyDiv.querySelector('svg');
-    if (svg) {
-      svg.classList.remove('set');
-      svg.classList.add('unset');
-    }
+    if (svg) { svg.classList.remove('set'); svg.classList.add('unset'); }
   } else {
     emptyDiv = makeFallbackDiv('unfilled-star');
   }
   btn.appendChild(emptyDiv);
-
   return btn;
 }
 
@@ -98,7 +94,8 @@ function readStars(el: HTMLElement): number {
   if (propsKey) {
     const props = (el as any)[propsKey] as Record<string, unknown>;
     for (const field of ['value', 'defaultValue', 'children']) {
-      const raw = parseFloat(String(props[field] ?? ''));
+      const val = props[field];
+      const raw = typeof val === 'number' ? val : parseFloat(String(val ?? ''));
       if (!isNaN(raw) && raw > 0) return raw > STAR_COUNT ? (raw / 100) * STAR_COUNT : raw;
     }
   }
@@ -108,13 +105,13 @@ function readStars(el: HTMLElement): number {
 }
 
 const ENTITY_MAP: Record<string, [string, string]> = {
-  scenes:     ['sceneUpdate',     'SceneUpdateInput'],
-  images:     ['imageUpdate',     'ImageUpdateInput'],
+  scenes: ['sceneUpdate', 'SceneUpdateInput'],
+  images: ['imageUpdate', 'ImageUpdateInput'],
   performers: ['performerUpdate', 'PerformerUpdateInput'],
-  studios:    ['studioUpdate',    'StudioUpdateInput'],
-  groups:     ['groupUpdate',     'GroupUpdateInput'],
-  galleries:  ['galleryUpdate',   'GalleryUpdateInput'],
-  movies:     ['movieUpdate',     'MovieUpdateInput'],
+  studios: ['studioUpdate', 'StudioUpdateInput'],
+  groups: ['groupUpdate', 'GroupUpdateInput'],
+  galleries: ['galleryUpdate', 'GalleryUpdateInput'],
+  movies: ['movieUpdate', 'MovieUpdateInput'],
 };
 
 async function saveRating(starValue: number): Promise<void> {
@@ -171,7 +168,8 @@ function inject(el: HTMLElement): void {
   const show = (v: number) => {
     renderStars(buttons, v);
     const txt = v > 0 ? String(v) : '';
-    valueEl.textContent = txt;
+    // Update valueEl text if it's not the one we're reading props from or if it's just a text span
+    if (valueEl.textContent !== txt) valueEl.textContent = txt;
     if (ratingNumSpan) ratingNumSpan.textContent = txt;
   };
 
@@ -200,14 +198,22 @@ function inject(el: HTMLElement): void {
     saveRating(v).catch(() => { committed = prev; show(committed); });
   });
 
-  const syncInterval = setInterval(() => {
-    if (!document.contains(container)) { clearInterval(syncInterval); return; }
+  const sync = () => {
+    if (!document.contains(container)) {
+      activeSyncers.delete(sync);
+      clearInterval(syncInterval);
+      return;
+    }
     const v = readStars(valueEl);
     if (v !== committed && !hovering) {
       committed = v;
       show(committed);
     }
-  }, 1000);
+  };
+
+  activeSyncers.add(sync);
+  // Polling reduced to 100ms for responsiveness
+  const syncInterval = setInterval(sync, 100);
 }
 
 const SELECTORS = ['.star-rating-number', '.rating-number'];
@@ -225,6 +231,15 @@ function init(): void {
     pending = true;
     requestAnimationFrame(() => { pending = false; scan(); });
   }).observe(document.body, { childList: true, subtree: true });
+
+  // Force an immediate sync update when the URL changes (SPA navigation)
+  let lastPath = window.location.pathname;
+  setInterval(() => {
+    if (window.location.pathname !== lastPath) {
+      lastPath = window.location.pathname;
+      activeSyncers.forEach(s => s()); // Trigger all active star raters to check their values
+    }
+  }, 100);
 }
 
 document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', init) : init();
