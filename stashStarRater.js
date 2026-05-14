@@ -59,6 +59,7 @@
     return res.data;
   }
   function inject(el) {
+    if (el.querySelector('input[name="ratingnumber"]')) return;
     const container = el.closest(".rating-stars") ?? (el.classList.contains("rating-number") ? el : null);
     if (!container || replaced.has(container)) return;
     replaced.add(container);

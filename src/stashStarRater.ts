@@ -63,6 +63,7 @@ async function gql(query: string, variables: any) {
 }
 
 function inject(el: HTMLElement) {
+  if (el.querySelector('input[name="ratingnumber"]')) return;
   const container = el.closest<HTMLElement>('.rating-stars') ?? (el.classList.contains('rating-number') ? el : null);
   if (!container || replaced.has(container)) return;
   replaced.add(container);
