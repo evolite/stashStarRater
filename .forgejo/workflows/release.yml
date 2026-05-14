@@ -28,6 +28,15 @@ jobs:
         id: ver
         run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 
+      - name: Sync version in yml
+        run: |
+          sed -i "s/^version: .*/version: ${{ steps.ver.outputs.version }}/" stashStarRater.yml
+          git config user.email "ci@codeberg.org"
+          git config user.name "CI"
+          git add stashStarRater.yml
+          git diff --staged --quiet || git commit -m "Bump version to v${{ steps.ver.outputs.version }}"
+          git push origin HEAD:main
+
       - name: Delete existing release
         run: |
           ID=$(curl -sL \
