@@ -45,7 +45,7 @@ const replaced = new WeakSet<HTMLElement>();
 let reactPropsKey: string | undefined;
 
 function getInfo() {
-  const m = window.location.pathname.match(/\/(scenes|images|performers|studios|groups|galleries|movies)\/(\d+)/);
+  const m = /\/(scenes|images|performers|studios|groups|galleries|movies)\/(\d+)/.exec(window.location.pathname);
   return m ? { id: m[2], cfg: ENTITY_MAP[m[1]] } : null;
 }
 
@@ -76,7 +76,7 @@ function inject(el: HTMLElement) {
     Array.from(container.children).forEach(c => (c as HTMLElement).style.display = 'none');
   } else {
     container.querySelectorAll<HTMLButtonElement>(':scope > button').forEach(b => b.style.display = 'none');
-    (valueEl as HTMLElement).style.display = 'none';
+    valueEl.style.display = 'none';
   }
 
   const btnParent = isDecimal ? (() => {
@@ -90,7 +90,7 @@ function inject(el: HTMLElement) {
     btn.dataset.srBtn = '1';
     btn.innerHTML = `<div class="filled-star"><svg viewBox="0 0 576 512"><path d="${STAR_FILLED_PATH}"></path></svg></div>
                      <div class="unfilled-star"><svg viewBox="0 0 576 512"><path d="${STAR_EMPTY_PATH}"></path></svg></div>`;
-    isDecimal ? btnParent.appendChild(btn) : btnParent.insertBefore(btn, valueEl);
+    isDecimal ? btnParent.appendChild(btn) : valueEl.before(btn);
     return btn;
   });
 
@@ -101,7 +101,7 @@ function inject(el: HTMLElement) {
   let committed = 0;
   let hovering = false;
   let mutating = false;
-  let pendingRating = NaN;
+  let pendingRating = Number.NaN;
   let pendingAttempts = 0;
   let entityId = getInfo()?.id ?? null;
 
@@ -109,7 +109,10 @@ function inject(el: HTMLElement) {
     const halfCommit = base % 1 !== 0 && v < base ? Math.ceil(base) : -1;
     buttons.forEach((btn, i) => {
       const starPos = i + 1;
-      const f = v >= starPos ? 1 : v >= i + 0.5 ? 0.5 : 0;
+      let f: number;
+      if (v >= starPos) f = 1;
+      else if (v >= i + 0.5) f = 0.5;
+      else f = 0;
       const isDownrate = f === 0 && starPos <= base;
       btn.classList.remove('star-fill-0', 'star-fill-50', 'star-fill-100', 'star-fill-outline', 'star-half-outline', 'star-downrate');
       if (starPos === halfCommit) {
@@ -124,27 +127,29 @@ function inject(el: HTMLElement) {
     if (numSpan) numSpan.textContent = v > 0 ? String(v) : '';
   };
 
+  const readPropRating = (props: any): number => {
+    if (props?.rating100 === undefined) {
+      const raw = props?.value ?? props?.children ?? Number.parseFloat(valueEl.textContent ?? '0');
+      return Number(raw) >= 10.5 ? (Number(raw) / 100) * STAR_COUNT : Number(raw);
+    }
+    return (props.rating100 / 100) * STAR_COUNT;
+  };
+
   let pollId: ReturnType<typeof setInterval>;
   const sync = () => {
     if (!document.contains(container)) { clearInterval(pollId); return; }
     const currentId = getInfo()?.id ?? null;
-    if (currentId !== entityId) { entityId = currentId; committed = 0; hovering = false; pendingRating = NaN; pendingAttempts = 0; show(0); }
+    if (currentId !== entityId) { entityId = currentId; committed = 0; hovering = false; pendingRating = Number.NaN; pendingAttempts = 0; show(0); }
     if (hovering || mutating) return;
     reactPropsKey ??= Object.keys(valueEl).find(k => k.startsWith('__reactProps$'));
     const props = reactPropsKey ? (valueEl as any)[reactPropsKey] : null;
-    let v: number;
-    if (props?.rating100 !== undefined) {
-      v = (props.rating100 / 100) * STAR_COUNT;
-    } else {
-      const raw = props?.value ?? props?.children ?? parseFloat(valueEl.textContent ?? '0');
-      v = Number(raw) >= 10.5 ? (Number(raw) / 100) * STAR_COUNT : Number(raw);
-    }
-    if (!isNaN(pendingRating)) {
-      if (!isNaN(v) && Math.abs(v - pendingRating) < 1e-6) { pendingRating = NaN; pendingAttempts = 0; }
-      else if (++pendingAttempts > 20) { pendingRating = NaN; pendingAttempts = 0; }
+    const v = readPropRating(props);
+    if (!Number.isNaN(pendingRating)) {
+      if (!Number.isNaN(v) && Math.abs(v - pendingRating) < 1e-6) { pendingRating = Number.NaN; pendingAttempts = 0; }
+      else if (++pendingAttempts > 20) { pendingRating = Number.NaN; pendingAttempts = 0; }
       else return;
     }
-    if (!isNaN(v) && v !== committed) { committed = v; show(committed); }
+    if (!Number.isNaN(v) && v !== committed) { committed = v; show(committed); }
   };
   pollId = setInterval(sync, 300);
   sync();
@@ -179,11 +184,11 @@ function inject(el: HTMLElement) {
         `mutation($i:${info.cfg.input}!){${info.cfg.update}(input:$i){id}}`,
         { i: { id: info.id, rating100: clearing ? null : ratingToSend } }
       );
-      if (!data?.[info.cfg.update]) throw new Error();
+      if (!data?.[info.cfg.update]) throw new Error('mutation returned no data');
       pendingRating = committed; pendingAttempts = 0;
     } catch {
       committed = prev; show(prev);
-      pendingRating = NaN;
+      pendingRating = Number.NaN;
     } finally {
       mutating = false;
     }
