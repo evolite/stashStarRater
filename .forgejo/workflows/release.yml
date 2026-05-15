@@ -22,19 +22,6 @@ jobs:
       - name: Build
         run: pnpm install --frozen-lockfile && pnpm run build
 
-      - name: SonarQube Analysis
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        run: |
-          export SONAR_SCANNER_VERSION=8.0.1.6346
-          export SONAR_SCANNER_HOME=$HOME/.sonar/sonar-scanner-$SONAR_SCANNER_VERSION-linux-x64
-          curl --create-dirs -sSLo $HOME/.sonar/sonar-scanner.zip \
-            https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-$SONAR_SCANNER_VERSION-linux-x64.zip
-          unzip -o $HOME/.sonar/sonar-scanner.zip -d $HOME/.sonar/
-          export PATH=$SONAR_SCANNER_HOME/bin:$PATH
-          sonar-scanner -Dsonar.token=$SONAR_TOKEN -Dsonar.host.url=$SONAR_HOST_URL
-
       - name: Create zip
         run: python3 -c "import zipfile; z=zipfile.ZipFile('stashStarRater.zip','w',zipfile.ZIP_DEFLATED); z.write('stashStarRater.yml'); z.write('stashStarRater.js'); z.close()"
 
