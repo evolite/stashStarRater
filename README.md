@@ -5,3 +5,4 @@ Uses the same styling as the 5 star input.
 Requirements
 In Stash set
 "Rating system type": Decimal
+
