@@ -1,25 +1,27 @@
 const STAR_COUNT = 10;
 
-const style = document.createElement('style');
-style.id = 'stash-star-rater-styles';
-style.textContent = `
-  .rating-stars button.btn-secondary.minimal { background: transparent !important; border: none !important; box-shadow: none !important; padding: 1px !important; }
-  .rating-stars button[data-sr-btn] svg { width: 1.25rem; height: 1.25rem; display: block; }
-  div.rating-number { width: auto !important; min-width: unset !important; }
-  .rating-stars button[data-sr-btn] .filled-star svg { fill: gold !important; }
-  .rating-stars button[data-sr-btn].star-fill-0 .unfilled-star svg { fill: white !important; }
-  .rating-stars button[data-sr-btn].star-fill-50 .unfilled-star svg { fill: white !important; }
-  .rating-stars button[data-sr-btn].star-fill-outline .filled-star { display: none; }
-  .rating-stars button[data-sr-btn].star-fill-outline .unfilled-star { display: block; }
-  .rating-stars button[data-sr-btn].star-fill-outline .unfilled-star svg { fill: gold !important; }
-  .rating-stars button[data-sr-btn].star-fill-50.star-downrate .unfilled-star svg { fill: gold !important; }
-  .rating-stars button[data-sr-btn].star-half-outline .filled-star { display: none; }
-  .rating-stars button[data-sr-btn].star-half-outline .unfilled-star { display: block; }
-  .rating-stars button[data-sr-btn].star-half-outline .unfilled-star svg path { fill: url(#sr-grad) !important; }
-  @keyframes sr-pop { 0% { transform: scale(1); } 40% { transform: scale(1.5); } 100% { transform: scale(1); } }
-  .rating-stars button[data-sr-btn].sr-pop { animation: sr-pop 0.2s ease-out; }
-`;
-if (!document.getElementById(style.id)) document.head.appendChild(style);
+if (!document.getElementById('stash-star-rater-styles')) {
+  const style = document.createElement('style');
+  style.id = 'stash-star-rater-styles';
+  style.textContent = `
+    .rating-stars button.btn-secondary.minimal { background: transparent !important; border: none !important; box-shadow: none !important; padding: 1px !important; }
+    .rating-stars button[data-sr-btn] svg { width: 1.25rem; height: 1.25rem; display: block; }
+    div.rating-number { width: auto !important; min-width: unset !important; }
+    .rating-stars button[data-sr-btn] .filled-star svg { fill: gold !important; }
+    .rating-stars button[data-sr-btn].star-fill-0 .unfilled-star svg { fill: white !important; }
+    .rating-stars button[data-sr-btn].star-fill-50 .unfilled-star svg { fill: white !important; }
+    .rating-stars button[data-sr-btn].star-fill-outline .filled-star { display: none; }
+    .rating-stars button[data-sr-btn].star-fill-outline .unfilled-star { display: block; }
+    .rating-stars button[data-sr-btn].star-fill-outline .unfilled-star svg { fill: gold !important; }
+    .rating-stars button[data-sr-btn].star-fill-50.star-downrate .unfilled-star svg { fill: gold !important; }
+    .rating-stars button[data-sr-btn].star-half-outline .filled-star { display: none; }
+    .rating-stars button[data-sr-btn].star-half-outline .unfilled-star { display: block; }
+    .rating-stars button[data-sr-btn].star-half-outline .unfilled-star svg path { fill: url(#sr-grad) !important; }
+    @keyframes sr-pop { 0% { transform: scale(1); } 40% { transform: scale(1.5); } 100% { transform: scale(1); } }
+    .rating-stars button[data-sr-btn].sr-pop { animation: sr-pop 0.2s ease-out; }
+  `;
+  document.head.appendChild(style);
+}
 
 if (!document.getElementById('sr-grad')) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -83,11 +85,12 @@ function inject(el: HTMLElement) {
     const div = document.createElement('div'); div.className = 'rating-stars'; container.appendChild(div); return div;
   })() : container;
 
-  const buttons = Array.from({ length: STAR_COUNT }, () => {
+  const buttons = Array.from({ length: STAR_COUNT }, (_, i) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'minimal star-fill-0 btn btn-secondary';
     btn.dataset.srBtn = '1';
+    btn.setAttribute('aria-label', `Rate ${i + 1} star${i ? 's' : ''}`);
     btn.innerHTML = `<div class="filled-star"><svg viewBox="0 0 576 512"><path d="${STAR_FILLED_PATH}"></path></svg></div>
                      <div class="unfilled-star"><svg viewBox="0 0 576 512"><path d="${STAR_EMPTY_PATH}"></path></svg></div>`;
     isDecimal ? btnParent.appendChild(btn) : valueEl.before(btn);
@@ -129,7 +132,8 @@ function inject(el: HTMLElement) {
   };
 
   const readPropRating = (props: any): number => {
-    if (props?.rating100 === undefined) {
+    if (props?.rating100 == null) {
+      if (props?.rating100 === null) return 0;
       const raw = props?.value ?? props?.children ?? Number.parseFloat(valueEl.textContent ?? '0');
       return Number(raw) >= 10.5 ? (Number(raw) / 100) * STAR_COUNT : Number(raw);
     }
@@ -193,9 +197,11 @@ function inject(el: HTMLElement) {
       );
       if (!data?.[info.cfg.update]) throw new Error('mutation returned no data');
       pendingRating = committed; pendingAttempts = 0;
-    } catch {
+    } catch (err) {
+      console.error('stashStarRater: rating mutation failed', err);
       committed = prev; show(prev);
       pendingRating = Number.NaN;
+      lastReactValue = Number.NaN;
     } finally {
       mutating = false;
     }
