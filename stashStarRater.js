@@ -154,11 +154,8 @@
       const props = reactPropsKey ? valueEl[reactPropsKey] : null;
       const v = readPropRating(props);
       if (!Number.isNaN(pendingRating)) {
-        if (!Number.isNaN(v) && Math.abs(v - pendingRating) < 1e-6) {
-          pendingRating = Number.NaN;
-          pendingAttempts = 0;
-          lastReactValue = v;
-        } else if (++pendingAttempts > 20) {
+        const matched = !Number.isNaN(v) && Math.abs(v - pendingRating) < 1e-6;
+        if (matched || ++pendingAttempts > 20) {
           pendingRating = Number.NaN;
           pendingAttempts = 0;
           lastReactValue = v;
