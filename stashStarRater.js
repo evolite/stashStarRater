@@ -99,6 +99,7 @@
     let mutating = false;
     let pendingRating = Number.NaN;
     let pendingAttempts = 0;
+    let lastReactValue = Number.NaN;
     let entityId = getInfo()?.id ?? null;
     const show = (v, base = v) => {
       const halfCommit = base % 1 !== 0 && v < base ? Math.ceil(base) : -1;
@@ -141,6 +142,7 @@
         hovering = false;
         pendingRating = Number.NaN;
         pendingAttempts = 0;
+        lastReactValue = Number.NaN;
         show(0);
       }
       if (hovering || mutating) return;
@@ -151,14 +153,20 @@
         if (!Number.isNaN(v) && Math.abs(v - pendingRating) < 1e-6) {
           pendingRating = Number.NaN;
           pendingAttempts = 0;
+          lastReactValue = v;
         } else if (++pendingAttempts > 20) {
           pendingRating = Number.NaN;
           pendingAttempts = 0;
-        } else return;
+          lastReactValue = v;
+        }
+        return;
       }
-      if (!Number.isNaN(v) && v !== committed) {
-        committed = v;
-        show(committed);
+      if (!Number.isNaN(v) && v !== lastReactValue) {
+        lastReactValue = v;
+        if (v !== committed) {
+          committed = v;
+          show(committed);
+        }
       }
     };
     pollId = setInterval(sync, 300);

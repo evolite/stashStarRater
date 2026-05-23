@@ -103,6 +103,7 @@ function inject(el: HTMLElement) {
   let mutating = false;
   let pendingRating = Number.NaN;
   let pendingAttempts = 0;
+  let lastReactValue = Number.NaN;
   let entityId = getInfo()?.id ?? null;
 
   const show = (v: number, base = v) => {
@@ -139,17 +140,23 @@ function inject(el: HTMLElement) {
   const sync = () => {
     if (!document.contains(container)) { clearInterval(pollId); return; }
     const currentId = getInfo()?.id ?? null;
-    if (currentId !== entityId) { entityId = currentId; committed = 0; hovering = false; pendingRating = Number.NaN; pendingAttempts = 0; show(0); }
+    if (currentId !== entityId) { entityId = currentId; committed = 0; hovering = false; pendingRating = Number.NaN; pendingAttempts = 0; lastReactValue = Number.NaN; show(0); }
     if (hovering || mutating) return;
     reactPropsKey ??= Object.keys(valueEl).find(k => k.startsWith('__reactProps$'));
     const props = reactPropsKey ? (valueEl as any)[reactPropsKey] : null;
     const v = readPropRating(props);
     if (!Number.isNaN(pendingRating)) {
-      if (!Number.isNaN(v) && Math.abs(v - pendingRating) < 1e-6) { pendingRating = Number.NaN; pendingAttempts = 0; }
-      else if (++pendingAttempts > 20) { pendingRating = Number.NaN; pendingAttempts = 0; }
-      else return;
+      if (!Number.isNaN(v) && Math.abs(v - pendingRating) < 1e-6) {
+        pendingRating = Number.NaN; pendingAttempts = 0; lastReactValue = v;
+      } else if (++pendingAttempts > 20) {
+        pendingRating = Number.NaN; pendingAttempts = 0; lastReactValue = v;
+      }
+      return;
     }
-    if (!Number.isNaN(v) && v !== committed) { committed = v; show(committed); }
+    if (!Number.isNaN(v) && v !== lastReactValue) {
+      lastReactValue = v;
+      if (v !== committed) { committed = v; show(committed); }
+    }
   };
   pollId = setInterval(sync, 300);
   sync();
