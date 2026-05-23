@@ -1,6 +1,6 @@
 name: Stash Star Rater
 description: For those who want to rate scenes 1-10 stars without fussing with decimal numbers
-version: 0.1.11
+version: 0.1.12
 ui:
   javascript:
     - stashStarRater.js
