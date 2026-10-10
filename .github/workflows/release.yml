@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - name: Build
+        run: pnpm install --frozen-lockfile && pnpm run build
+
+      - name: Create zip
+        run: python3 -c "import zipfile; z=zipfile.ZipFile('stashStarRater.zip','w',zipfile.ZIP_DEFLATED); z.write('stashStarRater.yml'); z.write('stashStarRater.js'); z.close()"
+
+      - name: Compute sha256
+        id: sha
+        run: echo "hash=$(sha256sum stashStarRater.zip | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Parse version
+        id: ver
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Sync version in yml
+        run: |
+          sed -i "s/^version: .*/version: ${{ steps.ver.outputs.version }}/" stashStarRater.yml
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add stashStarRater.yml
+          git diff --staged --quiet || git commit -m "Bump version to v${{ steps.ver.outputs.version }}"
+          git push origin HEAD:main
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete "$GITHUB_REF_NAME" --yes 2>/dev/null || true
+          gh release create "$GITHUB_REF_NAME" stashStarRater.zip --title "$GITHUB_REF_NAME" --notes "Release $GITHUB_REF_NAME"
+
+      # The plugin index stays on Codeberg Pages so users never change their index URL.
+      - name: Update pages index
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          HASH: ${{ steps.sha.outputs.hash }}
+          TAG: ${{ github.ref_name }}
+          CODEBERG_TOKEN: ${{ secrets.CODEBERG_TOKEN }}
+        run: |
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git clone "https://surging9143:${CODEBERG_TOKEN}@codeberg.org/surging9143/pages.git" /tmp/pages
+          export DATE=$(date +"%Y-%m-%d %H:%M:%S")
+          export URL="https://github.com/evolite/stashStarRater/releases/download/${TAG}/stashStarRater.zip"
+          python3 .github/update_pages.py
+          cd /tmp/pages
+          git add index.yml
+          git diff --staged --quiet || git commit -m "Update stashStarRater to v${VERSION}"
+          git push
